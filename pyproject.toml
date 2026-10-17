@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "soclab"
+version = "1.0.0"
+description = "A hands-on Security Operations Centre home lab: telemetry to detection to triage to response."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["soc", "security-operations-center", "detection-engineering", "siem", "splunk", "mitre-attack", "sigma"]
+classifiers = [
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dashboard = ["Flask>=3.0"]
+dev = ["pytest>=8.0", "Flask>=3.0"]
+
+[project.scripts]
+soclab = "soclab.cli:main"
+
+[tool.setuptools]
+packages = ["soclab"]
+
+[tool.setuptools.package-data]
+soclab = ["templates/*.html", "static/*.css"]
+
+[tool.pytest.ini_options]
+# Make the repo root importable so `pytest` works the same whether it is
+# invoked as `pytest`, `python -m pytest`, or from an IDE.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning:soclab.*"]
