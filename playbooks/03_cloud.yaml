@@ -1,0 +1,39 @@
+# Response playbooks - cloud control plane.
+
+- id: PB-007
+  title: Cloud misconfiguration and identity compromise
+  mitre: [T1530, T1098.003, T1556.006]
+  triage:
+    - Identify the principal (user, role, or assumed-role session) behind the API call and the source IP.
+    - Check whether the change was made through the approved change pipeline (CloudFormation / Terraform / CI).
+    - For a public bucket, determine what data was exposed and for how long - check the bucket access logs.
+    - For MFA removal, review the user's recent sign-in activity for impossible travel or new ASN/country.
+  contain:
+    - step: Re-privatise the bucket
+      command: "aws s3api put-public-access-block --bucket acme-payroll --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+    - step: Detach the over-privileged policy
+      command: "aws iam detach-user-policy --user-name m.kulkarni --policy-arn arn:aws:iam::aws:policy/AdministratorAccess"
+    - step: Re-enable MFA for the user
+      command: "aws iam enable-mfa --user-name root ; aws iam resync-mfa-device --user-name root"
+  eradicate:
+    - step: Find every access key created during the intrusion and deactivate it
+      command: "aws iam list-access-keys --user-name m.kulkarni | jq '.AccessKeyMetadata[]' | aws iam update-access-key --status Inactive --access-key-id <ID>"
+    - step: List other resources the principal created (a compromise often means a persistence IAM user)
+      command: "aws cloudtrail lookup-events --lookup-attributes AttributeKey=Username,AttributeValue=m.kulkarni"
+    - step: Review trust policies for new principals
+      command: "aws iam list-roles | jq -r '.Roles[].RoleName' | xargs -I{} aws iam get-role --role-name {} --query 'Role.AssumeRolePolicyDocument'"
+  recover:
+    - Rotate every credential the principal could read (application secrets, CI variables, KMS keys).
+    - Restore bucket policies from version control and enforce SCPs / permission boundaries.
+  escalate:
+    - Public exposure of a regulated data set => P1 and escalate to the cloud platform owner and the DPO.
+    - MFA removal on a root or break-glass account => P1, page the security lead.
+  evidence:
+    - CloudTrail event extracts for the principal
+    - Bucket access logs showing exposure window
+    - IAM credential listing before/after
+  comms: |
+    SEV: P1 - Cloud identity compromise
+    Principal: <USER> | Action: <ACTION> | Resource: <ARN> | Source IP: <IP>
+    Action: policy detached, bucket re-privatised, MFA re-enabled
+    Next: rotate all reachable credentials, review persistence, scope data exposure

@@ -1,0 +1,39 @@
+# Organisation context used by the triage engine.
+#
+# Real SOCs keep this as "SOC context" - business hours, key business
+# processes, known-good behaviour and whitelists.  It is what stops a Tier-1
+# analyst from drowning in false positives.
+
+organisation:
+  name: ACME Corporation
+  timezone: Asia/Kolkata
+  business_hours: "09:00-19:00"
+  weekends: [saturday, sunday]
+  critical_processes:
+    - Payroll processing (25th - 30th of every month, 22:00-02:00)
+    - Year-end audit data export
+    - Customer-facing portal availability
+
+# Systems that legitimately run the noisy things we detect.
+known_exceptions:
+  - rule_id: SOC-024
+    host: LINUX-BUILD-01
+    reason: "Build agent prunes old shadow copies as part of the nightly cache reset"
+    expires: 2027-03-31
+  - rule_id: SOC-012
+    host: WKS-ENG-021
+    reason: "Developer workstation - VS Code update task runs hourly"
+    expires: 2027-06-30
+
+# Users/accounts and source addresses allowed to behave in a way that would
+# otherwise be suspicious.  Shared egress addresses (VPN concentrators, NAT
+# gateways) are the classic source of false positives.
+allow_list:
+  source_ips:
+    - 10.10.99.5        # corporate VPN concentrator (shared egress)
+    - 10.10.99.6        # corporate NAT gateway
+  users:
+    - svc_backup
+    - svc_antivirus
+  processes:
+    - C:\Program Files\Windows Defender\MsMpEng.exe

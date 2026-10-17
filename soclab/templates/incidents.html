@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}SOC Lab - Incidents{% endblock %}
+{% block content %}
+
+<h1>Incident queue</h1>
+<p class="sub">
+  {{ incidents|length }} of {{ total }} incidents shown.
+  Every incident carries a risk score, a priority, an ATT&amp;CK mapping and a response playbook.
+</p>
+
+<form class="filters" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="search title / asset / user / IP / technique" />
+  <select name="priority">
+    <option value="">All priorities</option>
+    {% for p in ['P1','P2','P3','P4'] %}
+    <option value="{{ p }}" {{ 'selected' if priority == p }}>{{ p }}</option>
+    {% endfor %}
+  </select>
+  <select name="status">
+    <option value="">All statuses</option>
+    {% for s in ['new','suppressed'] %}
+    <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <select name="rule">
+    <option value="">All rules</option>
+    {% for r in all_rules %}
+    <option value="{{ r }}" {{ 'selected' if rule == r }}>{{ r }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+  <a class="btn-ghost" href="{{ url_for('incidents') }}"
+     style="padding:8px 14px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);font-size:13px;">Reset</a>
+</form>
+
+<div class="panel">
+  <table>
+    <thead>
+      <tr>
+        <th>Incident</th><th>Pr</th><th class="right">Score</th><th>Title</th>
+        <th>Asset</th><th>User</th><th>Source</th><th>ATT&amp;CK</th><th>First seen</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in incidents %}
+      <tr>
+        <td class="mono"><a href="{{ url_for('incident_detail', incident_id=i.id) }}">{{ i.id }}</a></td>
+        <td><span class="badge {{ i.priority }}">{{ i.priority }}</span></td>
+        <td class="tnum">{{ i.risk_score }}</td>
+        <td>
+          <a href="{{ url_for('incident_detail', incident_id=i.id) }}">{{ i.title[:58] }}</a>
+          <div class="tiny muted mono">{{ i.rule_id }}</div>
+        </td>
+        <td class="mono small">{{ i.asset }}<div class="tiny muted">{{ i.asset_criticality }}</div></td>
+        <td class="mono small">{{ i.user or '-' }}</td>
+        <td class="mono small">{{ i.source_ip or '-' }}</td>
+        <td><span class="badge tid">{{ i.technique_id }}</span></td>
+        <td class="mono tiny muted">{{ i.first_seen[:19].replace('T',' ') }}</td>
+        <td>
+          {% if i.status == 'suppressed' %}
+            <span class="badge sup" title="{{ i.suppression_reason }}">suppressed</span>
+          {% else %}
+            <span class="badge ok">new</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="muted" style="padding:26px;text-align:center;">No incidents match these filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

@@ -1,0 +1,115 @@
+# Additional detections that close blind spots found by the evaluation harness.
+
+- id: SOC-027
+  title: Network logon to a server host from a workstation account
+  description: >-
+    A type 3 (network) logon - the logon type used by SMB, WMI, RPC and most
+    remote administration tools - targeting a server. Interactive logons (type
+    2) and RDP (type 10) from a workstation are far more common, so a type 3
+    logon to a server is a strong lateral-movement signal.
+  severity: medium
+  confidence: medium
+  mitre:
+    tactic: Lateral Movement
+    technique: T1021
+    subtechnique: T1021.002
+    url: https://attack.mitre.org/techniques/T1021/002/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: "4624"
+      winlog.logon_type: 3
+    target_server:
+      host.name:
+        - "SRV-FS-002"
+        - "SRV-SQL-007"
+        - "DC01"
+    filter:
+      user.name:
+        - "svc_*"
+        - "administrator"
+    condition: selection and target_server and not filter
+  fields: [host.name, user.name, source.ip, winlog.logon_type]
+  falsepositives:
+    - Scheduled jobs and management agents
+  playbook: PB-003
+  splunk:
+    spl: >-
+      index=* EventCode=4624 Logon_Type=3 (host="SRV-FS-002" OR host="SRV-SQL-007")
+      | search - user="svc_*" | table _time user host src_ip Logon_Type
+
+- id: SOC-028
+  title: Archive or executable written to disk after an internet download
+  description: >-
+    Ingress tool transfer (T1105). The browser fetches a file and something
+    writes it to the Downloads folder - a second stage that antivirus should
+    have already scanned.
+  severity: medium
+  confidence: medium
+  mitre:
+    tactic: Command and Control
+    technique: T1105
+    url: https://attack.mitre.org/techniques/T1105/
+  data_sources: [edr, sysmon]
+  logsource:
+    product: windows
+    category: file_create
+  detection:
+    selection:
+      event.code: file_download
+    risky:
+      file.name:
+        - "*.zip"
+        - "*.iso"
+        - "*.exe"
+        - "*.html"
+        - "*.js"
+        - "*.lnk"
+    condition: selection and risky
+  fields: [file.name, file.path, host.name, user.name, url.original]
+  falsepositives:
+    - Legitimate installers downloaded by users
+  playbook: PB-005
+  splunk:
+    spl: >-
+      index=* EventCode=11 (TargetFilename="*.zip" OR TargetFilename="*.iso" OR
+      TargetFilename="*.exe") | stats count by Computer User | sort - count
+
+- id: SOC-029
+  title: Successful logon to a domain controller from a non-administrator workstation
+  description: >-
+    Interactive logon (type 2) against DC01 by an account that does not
+    normally administer the domain. A stolen credential used directly on the
+    domain controller is a high-severity finding.
+  severity: high
+  confidence: medium
+  mitre:
+    tactic: Credential Access
+    technique: T1078
+    url: https://attack.mitre.org/techniques/T1078/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: "4624"
+      host.name: "DC01"
+      winlog.logon_type: 2
+    filter:
+      user.name:
+        - "administrator"
+        - "svc_*"
+        - "j.venkatesh"
+    condition: selection and not filter
+  fields: [user.name, source.ip, host.name]
+  falsepositives:
+    - Helpdesk staff assisting with domain issues
+  playbook: PB-004
+  splunk:
+    spl: >-
+      index=* EventCode=4624 host="DC01" Logon_Type=2 | search - user="svc_*" |
+      table _time user src_ip host

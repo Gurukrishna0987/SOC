@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}SOC Lab - Playbooks{% endblock %}
+{% block content %}
+
+<h1>Response playbooks</h1>
+<p class="sub">
+  Detection without response is just a dashboard. Every rule links to a playbook
+  that says what to check, what to run, when to escalate and what to write in the ticket.
+</p>
+
+<div class="grid g3">
+  {% for pb in playbooks.values() %}
+  <div class="panel">
+    <h3><span class="badge sev">{{ pb.id }}</span></h3>
+    <p class="small" style="font-weight:600;">{{ pb.title }}</p>
+    <div class="pill-row mb0">
+      {% for m in pb.mitre %}<span class="pill">{{ m }}</span>{% endfor %}
+    </div>
+    <hr class="sep" />
+    <p class="tiny muted">
+      {{ pb.triage|length }} triage steps &middot; {{ pb.contain|length }} containment actions
+      &middot; {{ pb.escalate|length }} escalation triggers
+    </p>
+    <p class="tiny mb0"><a href="{{ url_for('playbook_detail', playbook_id=pb.id) }}">Open playbook &rarr;</a></p>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="panel mt">
+  <h2>Rules by playbook</h2>
+  <table>
+    <thead><tr><th>Playbook</th><th>Rules</th></tr></thead>
+    <tbody>
+      {% for pb in playbooks.values() %}
+      <tr>
+        <td class="mono small"><a href="{{ url_for('playbook_detail', playbook_id=pb.id) }}">{{ pb.id }}</a> {{ pb.title }}</td>
+        <td class="mono tiny">
+          {% for r in rules.values() %}{% if r.playbook == pb.id %}<span class="badge rule" style="margin-right:4px;">{{ r.id }}</span>{% endif %}{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ pb.id }} - {{ pb.title }}{% endblock %}
+{% block content %}
+
+<p class="small muted" style="margin:0 0 8px;"><a href="{{ url_for('playbooks_index') }}">&larr; All playbooks</a></p>
+<h1><span class="badge sev">{{ pb.id }}</span> {{ pb.title }}</h1>
+<p class="sub">
+  ATT&amp;CK: {% for m in pb.mitre %}<span class="badge tid" style="margin-right:4px;">{{ m }}</span>{% endfor %}
+  &nbsp;&middot;&nbsp; {{ linked_rules|length }} detection rule(s) map to this playbook
+</p>
+
+<div class="grid g2">
+  <div class="panel">
+    <h2>Triage steps</h2>
+    <ol class="steps">
+      {% for step in pb.triage %}<li>{{ step }}</li>{% endfor %}
+    </ol>
+
+    <h2 class="mt">Evidence to collect</h2>
+    <ul class="list">
+      {% for e in pb.evidence %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Containment</h2>
+      <ol class="steps">
+        {% for step in pb.contain %}
+        <li>
+          {{ step.step }}
+          {% if step.command %}<pre>{{ step.command }}</pre>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+
+    <div class="panel mt">
+      <h2>Eradication</h2>
+      <ol class="steps">
+        {% for step in pb.eradicate %}
+        <li>
+          {{ step.step }}
+          {% if step.command %}<pre>{{ step.command }}</pre>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+
+    <div class="panel mt">
+      <h2>Recovery</h2>
+      <ul class="list">{% for r in pb.recover %}<li>{{ r }}</li>{% endfor %}</ul>
+    </div>
+
+    <div class="panel mt">
+      <h2>Escalation triggers</h2>
+      <ul class="list">{% for e in pb.escalate %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+</div>
+
+<div class="panel mt">
+  <h2>Ticket / email template</h2>
+  <pre>{{ pb.comms }}</pre>
+</div>
+
+<div class="panel mt">
+  <h2>Rules that trigger this playbook</h2>
+  <table>
+    <thead><tr><th>Rule</th><th>Title</th><th>Severity</th><th>MITRE</th></tr></thead>
+    <tbody>
+      {% for r in linked_rules %}
+      <tr>
+        <td class="mono">{{ r.id }}</td>
+        <td class="small">{{ r.title }}</td>
+        <td><span class="badge sev">{{ r.severity }}</span></td>
+        <td class="mono tiny">{{ r.technique_id }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No rules linked.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

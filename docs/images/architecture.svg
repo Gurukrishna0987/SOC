@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 520" width="980" height="520" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#070b14"/>
+    </linearGradient>
+    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="980" height="520" fill="url(#bg)" rx="14"/>
+  <text x="32" y="44" fill="#e2e8f0" font-size="19" font-weight="700">SOC Lab — end-to-end detection &amp; response pipeline</text>
+  <text x="32" y="66" fill="#7f8ea8" font-size="12">synthetic telemetry → detection rules → triage → response  ·  every stage measured against labelled ground truth</text>
+
+  <!-- Stage 1 -->
+  <rect x="32" y="100" width="176" height="300" rx="10" fill="#111a2e" stroke="#1e2b45"/>
+  <text x="48" y="126" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">1 · TELEMETRY</text>
+  <rect x="48" y="142" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="58" y="161" fill="#cbd5e1" font-size="11">Windows Security</text>
+  <rect x="48" y="178" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="58" y="197" fill="#cbd5e1" font-size="11">Sysmon / EDR</text>
+  <rect x="48" y="214" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="58" y="233" fill="#cbd5e1" font-size="11">Linux auth syslog</text>
+  <rect x="48" y="250" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="58" y="269" fill="#cbd5e1" font-size="11">Email gateway</text>
+  <rect x="48" y="286" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="58" y="305" fill="#cbd5e1" font-size="11">Web proxy</text>
+  <rect x="48" y="322" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="58" y="341" fill="#cbd5e1" font-size="11">Cloud audit</text>
+  <text x="48" y="378" fill="#7f8ea8" font-size="10.5">300+ events · 7 intrusion</text>
+  <text x="48" y="392" fill="#7f8ea8" font-size="10.5">scenarios · every attack</text>
+  <text x="48" y="406" fill="#7f8ea8" font-size="10.5">event labelled ground truth</text>
+
+  <!-- Stage 2 -->
+  <rect x="244" y="100" width="176" height="300" rx="10" fill="#111a2e" stroke="#1e2b45"/>
+  <text x="260" y="126" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">2 · DETECTION</text>
+  <text x="260" y="150" fill="#cbd5e1" font-size="11.5" font-weight="600">Sigma-compatible engine</text>
+  <text x="260" y="170" fill="#7f8ea8" font-size="10.5">boolean conditions</text>
+  <text x="260" y="186" fill="#7f8ea8" font-size="10.5">field modifiers</text>
+  <text x="260" y="202" fill="#7f8ea8" font-size="10.5">threshold aggregation</text>
+  <text x="260" y="218" fill="#7f8ea8" font-size="10.5">sequence correlation</text>
+  <rect x="260" y="238" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="270" y="257" fill="#cbd5e1" font-size="11">29 detection rules</text>
+  <rect x="260" y="274" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="270" y="293" fill="#cbd5e1" font-size="11">MITRE ATT&amp;CK mapped</text>
+  <text x="260" y="330" fill="#7f8ea8" font-size="10.5">→ 28 alerts</text>
+  <text x="260" y="348" fill="#7f8ea8" font-size="10.5">→ 100% of 24 stages</text>
+
+  <!-- Stage 3 -->
+  <rect x="456" y="100" width="176" height="300" rx="10" fill="#111a2e" stroke="#1e2b45"/>
+  <text x="472" y="126" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">3 · TRIAGE</text>
+  <text x="472" y="152" fill="#cbd5e1" font-size="11.5" font-weight="600">Explainable risk model</text>
+  <text x="472" y="176" fill="#7f8ea8" font-size="10.5">rule severity        +0-40</text>
+  <text x="472" y="192" fill="#7f8ea8" font-size="10.5">asset criticality   +0-30</text>
+  <text x="472" y="208" fill="#7f8ea8" font-size="10.5">ATT&amp;CK tactic       +0-15</text>
+  <text x="472" y="224" fill="#7f8ea8" font-size="10.5">rule confidence     +0-10</text>
+  <text x="472" y="240" fill="#7f8ea8" font-size="10.5">event volume        +0-5</text>
+  <rect x="472" y="258" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="482" y="277" fill="#cbd5e1" font-size="11">P1 → P4 + SLA</text>
+  <rect x="472" y="294" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="482" y="313" fill="#cbd5e1" font-size="11">allow-list suppression</text>
+  <text x="472" y="352" fill="#7f8ea8" font-size="10.5">→ 11 P1 · 16 P2 · 1 P3</text>
+
+  <!-- Stage 4 -->
+  <rect x="668" y="100" width="176" height="300" rx="10" fill="#111a2e" stroke="#1e2b45"/>
+  <text x="684" y="126" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">4 · RESPONSE</text>
+  <rect x="684" y="142" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="694" y="161" fill="#cbd5e1" font-size="11">8 IR playbooks</text>
+  <text x="684" y="196" fill="#7f8ea8" font-size="10.5">triage → contain →</text>
+  <text x="684" y="212" fill="#7f8ea8" font-size="10.5">eradicate → recover →</text>
+  <text x="684" y="228" fill="#7f8ea8" font-size="10.5">escalate → ticket template</text>
+  <rect x="684" y="248" width="144" height="30" rx="6" fill="#16203a" stroke="#1e2b45"/>
+  <text x="694" y="267" fill="#cbd5e1" font-size="11">Splunk export</text>
+  <text x="684" y="300" fill="#7f8ea8" font-size="10.5">scheduled saved searches</text>
+  <text x="684" y="316" fill="#7f8ea8" font-size="10.5">dashboard + 12 hunts</text>
+  <text x="684" y="348" fill="#7f8ea8" font-size="10.5">→ analyst-ready output</text>
+
+  <!-- Side box: VAPT -->
+  <rect x="860" y="100" width="90" height="300" rx="10" fill="#111a2e" stroke="#1e2b45"/>
+  <text x="872" y="126" fill="#a78bfa" font-size="11" font-weight="700" letter-spacing="0.5">5 · VAPT</text>
+  <text x="872" y="152" fill="#7f8ea8" font-size="10.5">local-only</text>
+  <text x="872" y="168" fill="#7f8ea8" font-size="10.5">scanner</text>
+  <text x="872" y="196" fill="#7f8ea8" font-size="10.5">OWASP</text>
+  <text x="872" y="212" fill="#7f8ea8" font-size="10.5">Top 10</text>
+  <text x="872" y="240" fill="#7f8ea8" font-size="10.5">headers,</text>
+  <text x="872" y="256" fill="#7f8ea8" font-size="10.5">cookies,</text>
+  <text x="872" y="272" fill="#7f8ea8" font-size="10.5">secrets, TLS</text>
+  <text x="872" y="300" fill="#7f8ea8" font-size="10.5">→ 11 findings</text>
+
+  <!-- Arrows -->
+  <line x1="210" y1="250" x2="240" y2="250" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="422" y1="250" x2="452" y2="250" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="634" y1="250" x2="664" y2="250" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="846" y1="250" x2="856" y2="250" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Feedback loop -->
+  <path d="M 756 402 L 756 440 L 120 440 L 120 404" fill="none" stroke="url(#acc)" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="380" y="460" fill="#38bdf8" font-size="11">coverage &amp; precision measured against ground truth → rules tuned, blind spots closed</text>
+
+  <!-- Footer metrics -->
+  <rect x="32" y="476" width="916" height="1" fill="#1e2b45"/>
+  <text x="32" y="500" fill="#7f8ea8" font-size="11">29 rules   ·   8 playbooks   ·   303 events   ·   28 incidents   ·   100% stage recall   ·   92.9% precision   ·   48 tests   ·   CI on every commit</text>
+</svg>

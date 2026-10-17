@@ -1,0 +1,178 @@
+# Response playbooks - endpoint, phishing and exfiltration.
+
+- id: PB-002
+  title: Malicious script execution and defence evasion
+  mitre: [T1059.001, T1562.001, T1562.004, T1204.002]
+  triage:
+    - 'Decode the command line: base64 -d the -enc payload, or paste the 4104 script block into a decoder.'
+    - Identify the parent process. winword.exe -> powershell.exe is a macro; explorer.exe -> powershell.exe is often a user running a script.
+    - 'Pull the full process tree around the event: `index=* (host=<HOST>) | table _time process.parent.name process.name process.command_line`.'
+    - Check whether real-time protection is still enabled on the host.
+  contain:
+    - step: Isolate the host from the network (EDR network containment)
+      command: "Get-MpComputerStatus | Select-Object AMRunningMode, RealTimeProtectionEnabled, AntivirusEnabled"
+    - step: Kill the malicious process tree and block the hash
+      command: "Stop-Process -Id <PID> -Force ; Add-MpPreference -ExclusionPath 'C:\\Users\\Public\\*'"
+    - step: Re-enable real-time protection
+      command: "Set-MpPreference -DisableRealtimeMonitoring $false"
+  eradicate:
+    - step: Remove the scheduled task / service used for persistence
+      command: "Get-ScheduledTask | Where-Object {$_.TaskName -like '*Update*'} | Unregister-ScheduledTask -Confirm:$false"
+    - step: Collect the payload for malware analysis
+      command: "Get-FileHash -Algorithm SHA256 'C:\\Users\\Public\\payload.exe' ; Get-AuthenticodeSignature 'C:\\Users\\Public\\payload.exe'"
+    - step: Scan the host with an updated EDR definition set
+  recover:
+    - Rebuild the host from a known-good image if code execution cannot be ruled out.
+    - Reset credentials of the user and of any account the script touched.
+  escalate:
+    - Defence evasion on a crown-jewel asset => P1. Notify the endpoint team and the asset owner.
+    - If AV was disabled deliberately and no ticket exists, treat as a confirmed compromise.
+  evidence:
+    - Full process tree with command lines and hashes
+    - Script block logs (4104) for the host
+    - Memory capture if the host is still running
+  comms: |
+    SEV: P1 - Malicious script execution with defence evasion
+    Host: <HOST> | User: <USER> | Parent: <PARENT> | Technique: T1059.001
+    Action: host isolated, real-time protection re-enabled, persistence removed
+    Next: rebuild host, reset credentials, verify no further execution
+
+- id: PB-003
+  title: Lateral movement and persistence response
+  mitre: [T1021.002, T1543.003, T1053.005, T1070.001]
+  triage:
+    - 'Build the movement path: source host -> destination host -> account, from 4624 type 3 and 5140 events.'
+    - Check every share that was accessed and every service/task created in the window.
+    - If event 1102 (audit log cleared) appears in the same window, assume anti-forensic intent.
+  contain:
+    - step: Isolate the source host
+      command: "Get-NetAdapter | Where-Object Status -eq 'Up' | Disable-NetAdapter -Confirm:$false"
+    - step: Disable the abused account
+      command: "net user <account> /active:no"
+    - step: Block SMB (445) and RPC (135) between the two hosts at the firewall
+      command: "New-NetFirewallRule -DisplayName 'Block lateral' -Direction Block -Protocol TCP -LocalPort 445,135 -RemoteAddress <DST_IP>"
+  eradicate:
+    - step: Delete the malicious service
+      command: "sc.exe delete PSEXESVC"
+    - step: Remove the scheduled task created by the attacker
+      command: "Get-ScheduledTask | Where-Object Author -eq 'SYSTEM' | Unregister-ScheduledTask -Confirm:$false"
+    - step: Verify the audit log service is running and logging
+      command: "auditpol /get /subcategory:'Audit Log'"
+  recover:
+    - Restore the abused account with a new password and MFA.
+    - Review data accessed on the file server during the window.
+  escalate:
+    - Movement into a critical asset => P1 and page the IR lead.
+  evidence:
+    - 4624 type 3 + 5140 + 7045 + 4698 extracts for the window
+    - File share access audit from the file server
+  comms: |
+    SEV: P1 - Lateral movement detected
+    Path: <SRC_HOST> -> <DST_HOST> as <ACCOUNT> | Technique: T1021.002
+    Action: source isolated, account disabled, malicious service removed
+    Next: scope data access, rebuild destination host, review all accounts with access
+
+- id: PB-005
+  title: Phishing response
+  mitre: [T1566.001, T1204.001, T1056.003]
+  triage:
+    - 'Read the message: sender, reply-to, SPF/DKIM/DMARC results, link domains, attachment type.'
+    - Search the mail gateway for other recipients of the same campaign (same subject, same URL).
+    - 'Search the proxy for anyone who visited the link: `index=proxy url="*<domain>*" | table _time src user`.'
+    - Check whether credentials were submitted (POST with a password field) and which accounts are affected.
+  contain:
+    - step: Purge the message from all mailboxes
+      command: "Get-Mailbox -Recipient All | Remove-Message -Subject '<SUBJECT>' -Confirm:$false"
+    - step: Block the sending domain and the landing URL
+      command: "Add-HostBlockListEntry -HostName '<domain>' ; Add-UrlBlockListEntry -Url '<url>'"
+    - step: Reset the password of any user who submitted credentials
+      command: "Set-ADUserPassword -Identity <user> -Reset -NewPassword (Read-Host -AsSecureString)"
+  eradicate:
+    - step: Check for inbox rules created by the phish (auto-forward, delete)
+      command: "Get-InboxRule -Mailbox <user> | Where-Object {$_.MoveToFolder -ne $null}"
+    - step: Check for OAuth consent grants to unknown applications
+      command: "Get-MgUserOAuthAppPermission -UserId <user> -All"
+  recover:
+    - Force MFA re-registration for affected users and confirm sign-in activity.
+  escalate:
+    - Credentials submitted => P1 for that user, notify identity management and the business owner.
+    - If the phish targeted finance or HR, notify the relevant team proactively.
+  evidence:
+    - Raw email headers and the .eml file
+    - Proxy hits for the landing URL with the list of affected users
+    - Screenshots of the inbox rule list before/after
+  comms: |
+    SEV: P1 - Phishing campaign with credential submission
+    Campaign: <SUBJECT> | Recipients: <N> | Clicked: <N> | Credentials submitted: <N>
+    Action: message purged, domains blocked, affected users' passwords reset
+    Next: session revocation, MFA re-enrolment, block confirmation to all recipients
+
+- id: PB-006
+  title: Exfiltration and command-and-control response
+  mitre: [T1041, T1048.003, T1071.001]
+  triage:
+    - 'Quantify the data: bytes transferred, number of objects, and the time window.'
+    - Identify the destination domain/IP and check it against threat intelligence.
+    - For DNS tunnelling, extract the encoded subdomain and decode it (base32/base64, often XORed).
+    - Determine the exact data set involved - that determines the breach notification.
+  contain:
+    - step: Block the destination at the proxy and firewall
+      command: "Add-UrlBlockListEntry -Url '<url>'"
+    - step: Isolate the source host
+      command: "Get-NetAdapter | Where-Object Status -eq 'Up' | Disable-NetAdapter -Confirm:$false"
+    - step: Revoke any active session tokens for the account
+      command: "Get-AzureADUserAuthenticationSignInActivity -UserName <user>"
+  eradicate:
+    - step: Remove the exfiltration tool and its persistence
+      command: "Get-Process | Where-Object {$_.Name -eq 'locker.exe'} | Stop-Process -Force"
+    - step: Review cloud sync folders for automatic uploads
+  recover:
+    - Restore affected data from backups and confirm integrity.
+  escalate:
+    - Confirmed bulk exfiltration => P1 and escalate to legal/DPO for breach assessment.
+  evidence:
+    - Proxy logs with byte counts
+    - DNS logs for the full tunnelling window
+    - List of files transferred
+  comms: |
+    SEV: P1 - Data exfiltration confirmed
+    Source: <HOST> | Destination: <DOMAIN / IP> | Volume: <SIZE> | Window: <START-END>
+    Action: destination blocked, host isolated, session tokens revoked
+    Next: data set scoping with the data owner, breach notification assessment
+
+- id: PB-008
+  title: Ransomware response
+  mitre: [T1486, T1490, T1041]
+  triage:
+    - 'Confirm encryption activity: file extensions changing, mass rename events, ransom notes.'
+    - Establish the patient zero host and the initial access vector.
+    - Find the earliest deletion of shadow copies / backups - it marks the start of the attack.
+    - Check whether backups are also encrypted or deleted.
+  contain:
+    - step: Isolate the affected host immediately (network containment, not shutdown - you need memory)
+      command: "Get-NetAdapter | Where-Object Status -eq 'Up' | Disable-NetAdapter -Confirm:$false"
+    - step: Disable the malicious account
+      command: "net user <account> /active:no"
+    - step: Block the C2 and exfil destinations
+      command: "Add-UrlBlockListEntry -Url '<url>'"
+  eradicate:
+    - step: Do NOT reboot - capture memory first
+      command: "Get-Process -Name 'locker.exe' | Select-Object -ExpandProperty Modules"
+    - step: Preserve the encrypted files and the ransom note as evidence
+      command: "Copy-Item 'D:\\Finance\\README_FOR_DECRYPT.txt' 'C:\\Evidence\\' "
+    - step: Hunt for the same hash across the estate
+      command: "index=* file.hash.sha256='<HASH>' | table _time host user file.path"
+  recover:
+    - Restore from the last clean offline backup and validate the restore.
+    - Rebuild the host; never just decrypt and return it to production.
+  escalate:
+    - Any confirmed encryption => P1, call the incident response lead and the business continuity owner immediately.
+  evidence:
+    - Hashes, ransom note, list of affected files
+    - Memory image
+    - Backup restore logs
+  comms: |
+    SEV: P1 - Ransomware encryption confirmed
+    Patient zero: <HOST> | Files encrypted: <N> | Backups: <STATUS>
+    Action: host isolated, account disabled, C2 blocked
+    Next: offline backup restore, estate-wide hash hunt, IR lead engaged
