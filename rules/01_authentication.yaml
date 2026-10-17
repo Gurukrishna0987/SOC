@@ -1,0 +1,194 @@
+# Authentication & credential-access detections
+# Sigma-inspired format. Each rule maps to MITRE ATT&CK and to a response playbook.
+
+- id: SOC-001
+  title: Multiple failed logons from a single source (brute force / password spray)
+  description: >-
+    More than 10 failed Windows logons from one source IP inside a 5 minute
+    window. This is the classic brute-force pattern. If the same IP later
+    produces a successful logon, escalate immediately.
+  severity: high
+  confidence: high
+  mitre:
+    tactic: Credential Access
+    technique: T1110
+    subtechnique: T1110.001
+    url: https://attack.mitre.org/techniques/T1110/001/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: 4625
+    condition: selection | count() > 10
+    group_by: [source.ip, user.name]
+    window: 5m
+  fields: [source.ip, user.name, host.name, source.port]
+  falsepositives:
+    - Users mistyping passwords repeatedly on a locked-out account
+    - Legacy application or service re-authenticating in a loop
+  references:
+    - https://attack.mitre.org/techniques/T1110/001/
+  playbook: PB-001
+  splunk:
+    spl: >-
+      index=* (EventCode=4625) | stats count as attempts dc(user) as user
+      by src_ip | where attempts > 10 | sort - attempts
+
+- id: SOC-002
+  title: Successful logon from a source that had recent failed logons
+  description: >-
+    A successful Windows logon (4624) from a source IP that produced failed
+    logons in the previous 15 minutes. This is the "the brute force worked"
+    moment and is the highest-value detection for a Tier-1 analyst.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Credential Access
+    technique: T1110
+    subtechnique: T1110.001
+    url: https://attack.mitre.org/techniques/T1110/001/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    failures:
+      event.code: 4625
+    success:
+      event.code: 4624
+      event.outcome: success
+    condition: sequence
+    sequence: [failures, success]
+    sequence_threshold: 3
+    group_by: [source.ip]
+    window: 15m
+  fields: [source.ip, user.name, host.name]
+  falsepositives:
+    - A user correcting a typo immediately after
+  playbook: PB-001
+  splunk:
+    spl: >-
+      index=* EventCode=4625 | stats count as fails dc(user) as user by src_ip
+      | where fails > 3 | join src_ip [ search index=* EventCode=4624 | table
+      _time src_ip user Account_Name ]
+
+- id: SOC-003
+  title: New user account created on a domain controller
+  description: >-
+    Windows event 4720 - a new account was created. Any account created
+    outside a documented joiner-mover-leaver (JML) request must be treated as
+    suspicious.
+  severity: medium
+  confidence: high
+  mitre:
+    tactic: Persistence
+    technique: T1136
+    subtechnique: T1136.001
+    url: https://attack.mitre.org/techniques/T1136/001/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: 4720
+    condition: selection
+  fields: [user.name, host.name, subject.user.name]
+  falsepositives:
+    - Legitimate service or application account created by a provisioning tool
+  playbook: PB-004
+  splunk:
+    spl: index=* EventCode=4720 | table _time user Account_Name host TargetUserName
+
+- id: SOC-004
+  title: Account added to a privileged group
+  description: >-
+    Windows event 4732 - a member was added to a security-enabled global or
+    local group. Addition to Domain Admins or a local Administrators group is
+    a high-fidelity indicator of privilege escalation.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Persistence
+    technique: T1098
+    subtechnique: T1098.003
+    url: https://attack.mitre.org/techniques/T1098/003/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: 4732
+      group.name:
+        - "Domain Admins"
+        - "Administrators"
+        - "Enterprise Admins"
+    condition: selection
+  fields: [user.name, group.name, host.name]
+  falsepositives:
+    - Approved role change for a member of the infrastructure team
+  playbook: PB-004
+  splunk:
+    spl: index=* EventCode=4732 | where "TargetUserName" IN ("Domain Admins","Administrators")
+
+- id: SOC-005
+  title: Special privileges assigned to a new logon
+  description: >-
+    Windows event 4672 - a logon was assigned special privileges (backup
+    privileges, audit, or debug). Abused by attackers to copy protected files
+    and dump credentials.
+  severity: medium
+  confidence: medium
+  mitre:
+    tactic: Privilege Escalation
+    technique: T1078
+    url: https://attack.mitre.org/techniques/T1078/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: 4672
+    filter:
+      user.name: "svc_*"
+    condition: selection and not filter
+  fields: [user.name, host.name, privileges]
+  falsepositives:
+    - Scheduled backup service accounts
+  playbook: PB-004
+  splunk:
+    spl: index=* EventCode=4672 | search - user="svc_*" | table _time user host PrivilegeList
+
+- id: SOC-006
+  title: Linux SSH brute force against a server
+  description: >-
+    Repeated "Failed password" entries in the Linux auth log from one source
+    IP. Same pattern as the Windows rule, different telemetry.
+  severity: high
+  confidence: high
+  mitre:
+    tactic: Credential Access
+    technique: T1110
+    subtechnique: T1110.001
+    url: https://attack.mitre.org/techniques/T1110/001/
+  data_sources: [linux_syslog]
+  logsource:
+    product: linux
+    service: sshd
+  detection:
+    selection:
+      event.code: "sshd_fail"
+      message: "*Failed password*"
+    condition: selection | count() > 8
+    group_by: [source.ip]
+    window: 5m
+  fields: [source.ip, user.name, host.name]
+  falsepositives:
+    - Automated health-check scripts with a wrong key
+  playbook: PB-001
+  splunk:
+    spl: index=linux sourcetype="syslog" "Failed password" | stats count by src_ip | where count > 8

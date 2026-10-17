@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}{{ inc.id }} - {{ inc.title }}{% endblock %}
+{% block content %}
+
+<p class="small muted" style="margin:0 0 8px;">
+  <a href="{{ url_for('incidents') }}">&larr; Incident queue</a>
+</p>
+<h1>
+  {{ inc.title }}
+  <span class="badge {{ inc.priority }}" style="vertical-align:middle;">{{ inc.priority }}</span>
+  <span class="badge rule" style="vertical-align:middle;">{{ inc.rule_id }}</span>
+  <span class="badge tid" style="vertical-align:middle;">{{ inc.technique_id }}</span>
+</h1>
+<p class="sub">
+  {{ inc.tactic }} &middot; {{ inc.asset }} ({{ inc.asset_role }}) &middot; detected {{ inc.first_seen[:19].replace('T',' ') }} UTC
+  &middot; {{ inc.event_count }} correlated events &middot; respond by {{ inc.due_by[:19].replace('T',' ') }} UTC
+</p>
+
+<div class="grid g23">
+  <div>
+    <div class="panel">
+      <h2>Risk breakdown</h2>
+      <div class="grid g3 mb0">
+        <div class="kpi">
+          <span class="value {{ 'p1-text' if inc.risk_score >= 80 else ('p2-text' if inc.risk_score >= 55 else 'accent-text') }}">{{ inc.risk_score }}</span>
+          <span class="label">Risk score / 100</span>
+        </div>
+        <div class="kpi">
+          <span class="value">{{ inc.event_count }}</span>
+          <span class="label">Events matched</span>
+        </div>
+        <div class="kpi">
+          <span class="value">{{ inc.sla_minutes }}m</span>
+          <span class="label">Response SLA</span>
+        </div>
+      </div>
+      <hr class="sep" />
+      <ul class="list">
+        {% for r in inc.rationale %}
+        <li>{{ r }}</li>
+        {% endfor %}
+      </ul>
+      {% if inc.status == 'suppressed' %}
+      <hr class="sep" />
+      <p class="small"><span class="badge sup">suppressed</span> {{ inc.suppression_reason }}</p>
+      {% endif %}
+    </div>
+
+    <div class="panel mt">
+      <h2>Enriched entities</h2>
+      <dl class="kv">
+        <dt>Asset</dt><dd class="mono">{{ inc.asset }} <span class="muted">({{ inc.asset_criticality }}, {{ inc.data_classification or 'n/a' }})</span></dd>
+        <dt>Owner</dt><dd class="mono">{{ inc.owner or '-' }}</dd>
+        <dt>User</dt><dd class="mono">{{ inc.user or '-' }}</dd>
+        <dt>Source IP</dt><dd class="mono">{{ inc.source_ip or '-' }}</dd>
+        <dt>Destination</dt><dd class="mono">{{ inc.destination_ip or '-' }}</dd>
+        {% for k, v in inc.entities.items() %}
+        <dt>{{ k }}</dt><dd class="mono small">{{ v }}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+
+    <div class="panel mt">
+      <h2>Matched events ({{ inc.event_count }})</h2>
+      <table>
+        <thead><tr><th>Timestamp</th><th>Source</th><th>Event</th><th>Key fields</th></tr></thead>
+        <tbody>
+          {% for e in inc.matched_events %}
+          <tr>
+            <td class="mono tiny muted">{{ e.timestamp[:19].replace('T',' ') }}</td>
+            <td class="mono tiny">{{ e.source }}</td>
+            <td class="mono tiny">{{ e.fields.get('event.code', '') }}</td>
+            <td class="tiny mono">
+              {% for k in ['user.name','host.name','source.ip','destination.ip','process.name','process.command_line','file.name','url.original','mail.from','cloud.action','message'] %}
+                {% if e.fields.get(k) %}<div><span class="muted">{{ k }}:</span> {{ e.fields.get(k) }}</div>{% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Response playbook</h2>
+      {% if playbook %}
+        <p class="small"><span class="badge sev">{{ playbook.id }}</span> {{ playbook.title }}</p>
+        <h3>Triage</h3>
+        <ol class="steps">
+          {% for step in playbook.triage %}<li>{{ step }}</li>{% endfor %}
+        </ol>
+        <h3 class="mt">Contain</h3>
+        <ol class="steps">
+          {% for step in playbook.contain %}<li>{{ step.step }}{% if step.command %}<pre>{{ step.command }}</pre>{% endif %}</li>{% endfor %}
+        </ol>
+        <h3 class="mt">Escalate</h3>
+        <ul class="list">
+          {% for step in playbook.escalate %}<li>{{ step }}</li>{% endfor %}
+        </ul>
+        <hr class="sep" />
+        <h3>Ticket template</h3>
+        <pre>{{ playbook.comms }}</pre>
+        <p class="tiny muted mb0"><a href="{{ url_for('playbook_detail', playbook_id=playbook.id) }}">Full playbook &rarr;</a></p>
+      {% else %}
+        <p class="muted small mb0">No playbook linked to this rule.</p>
+      {% endif %}
+    </div>
+
+    <div class="panel mt">
+      <h2>Rule {{ inc.rule_id }}</h2>
+      {% if rule %}
+        <p class="small">{{ rule.description }}</p>
+        <dl class="kv">
+          <dt>Severity</dt><dd><span class="badge sev">{{ rule.severity }}</span></dd>
+          <dt>Confidence</dt><dd>{{ rule.confidence }}</dd>
+          <dt>MITRE</dt><dd class="mono">{{ rule.technique_id }} - {{ rule.tactic }}</dd>
+          <dt>Data source</dt><dd class="mono">{{ rule.data_sources|join(', ') }}</dd>
+          <dt>Condition</dt><dd class="mono">{{ rule.condition }}</dd>
+        </dl>
+        <h3 class="mt">Known false positives</h3>
+        <ul class="list">
+          {% for fp in rule.falsepositives %}<li>{{ fp }}</li>{% else %}<li class="muted">None recorded</li>{% endfor %}
+        </ul>
+        {% if rule.splunk.get('spl') %}
+        <h3 class="mt">Equivalent SPL</h3>
+        <pre>{{ rule.splunk.get('spl') }}</pre>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    {% if linked %}
+    <div class="panel mt">
+      <h2>Correlated incidents</h2>
+      <p class="tiny muted">Alerts sharing the same actor or scenario - read them as one story.</p>
+      <ul class="list">
+        {% for l in linked %}
+        <li>
+          <a href="{{ url_for('incident_detail', incident_id=l.id) }}">{{ l.id }}</a>
+          <span class="badge {{ l.priority }}">{{ l.priority }}</span>
+          <span class="small">{{ l.title[:52] }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

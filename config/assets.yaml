@@ -1,0 +1,71 @@
+# Asset inventory for the lab organisation.
+#
+# In a real SOC this is the CMDB / asset database.  Asset criticality is the
+# single most important input into alert prioritisation: a failed logon on a
+# test VM and a failed logon on the finance file server are the same event and
+# completely different incidents.
+assets:
+  DC01:
+    role: Domain Controller
+    business_unit: IT Operations
+    criticality: critical
+    data_classification: restricted
+    owner: infra@acme-corp.in
+  WKS-FIN-014:
+    role: Finance Workstation
+    business_unit: Finance
+    criticality: critical
+    data_classification: confidential
+    owner: it-finance@acme-corp.in
+  WKS-HR-003:
+    role: HR Workstation
+    business_unit: Human Resources
+    criticality: medium
+    data_classification: confidential
+    owner: it-hr@acme-corp.in
+  WKS-ENG-021:
+    role: Engineering Workstation
+    business_unit: Engineering
+    criticality: medium
+    data_classification: internal
+    owner: it-eng@acme-corp.in
+  SRV-FS-002:
+    role: File Server
+    business_unit: IT Operations
+    criticality: high
+    data_classification: confidential
+    owner: infra@acme-corp.in
+  SRV-SQL-007:
+    role: SQL Server
+    business_unit: Engineering
+    criticality: critical
+    data_classification: restricted
+    owner: dba@acme-corp.in
+  WEB-PUBLIC-01:
+    role: Public Web Server
+    business_unit: Engineering
+    criticality: high
+    data_classification: public
+    owner: webops@acme-corp.in
+  LINUX-BUILD-01:
+    role: Build Server
+    business_unit: Engineering
+    criticality: medium
+    data_classification: internal
+    owner: devops@acme-corp.in
+
+# Points added to an alert's risk score by asset criticality.
+criticality_weights:
+  critical: 30
+  high: 22
+  medium: 12
+  low: 6
+  unknown: 8
+
+# Points added to an alert's risk score by rule severity.
+severity_scores:
+  critical: 40
+  high: 30
+  medium: 20
+  low: 10
+  informational: 5

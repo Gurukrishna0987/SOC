@@ -1,0 +1,186 @@
+# Email, web-proxy and DNS detections (phishing and exfiltration chains).
+
+- id: SOC-015
+  title: Suspicious inbound email - authentication failed and risky attachment
+  description: >-
+    SPF, DKIM and DMARC all failed, the reply-to domain differs from the
+    sending domain, and the message carries an archive or executable
+    attachment. This is the classic credential-phishing delivery.
+  severity: high
+  confidence: high
+  mitre:
+    tactic: Initial Access
+    technique: T1566
+    subtechnique: T1566.001
+    url: https://attack.mitre.org/techniques/T1566/001/
+  data_sources: [email_gateway]
+  logsource:
+    product: email_gateway
+  detection:
+    selection:
+      event.code: mail_delivered
+      mail.spf_result: fail
+      mail.dkim_result: fail
+      mail.dmarc_result: fail
+    attachment:
+      mail.attachment.count:
+        - ">0"
+    risky_ext:
+      mail.file.name:
+        - "*.zip"
+        - "*.iso"
+        - "*.html"
+        - "*.exe"
+        - "*.js"
+        - "*.lnk"
+    condition: selection and attachment and risky_ext
+  fields: [mail.from, mail.to, mail.subject, mail.file.name, host.name]
+  falsepositives:
+    - Poorly configured legitimate senders
+  playbook: PB-005
+  splunk:
+    spl: >-
+      index=email sourcetype="email:send" (from="*" OR "SPF"="fail") | search
+      spf="fail" dkim="fail" dmarc="fail" | table _time from to subject
+      attachments
+
+- id: SOC-016
+  title: User visited a URL received by email (phishing click)
+  description: >-
+    Links the web proxy to the URL delivered by the mail gateway. Seeing the
+    click turns a "suspicious email" into a confirmed compromise, and it tells
+    you which host to isolate.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Execution
+    technique: T1204
+    subtechnique: T1204.001
+    url: https://attack.mitre.org/techniques/T1204/001/
+  data_sources: [proxy]
+  logsource:
+    product: proxy
+  detection:
+    selection:
+      event.category: web
+      url.original: "*acme-portal-verify*"
+    condition: selection
+  fields: [url.original, user.name, host.name, source.ip]
+  falsepositives: []
+  playbook: PB-005
+  splunk:
+    spl: index=proxy url="*acme-portal-verify*" | table _time src user dest
+
+- id: SOC-017
+  title: Credentials submitted to an external site
+  description: >-
+    An HTTP POST carrying a password field to a site that is not on the
+    corporate allow-list. Directly indicates credential harvesting.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Credential Access
+    technique: T1056
+    subtechnique: T1056.003
+    url: https://attack.mitre.org/techniques/T1056/003/
+  data_sources: [proxy]
+  logsource:
+    product: proxy
+  detection:
+    selection:
+      event.code: credsubmit
+    condition: selection
+  fields: [user.name, host.name, url.original, destination.ip]
+  falsepositives:
+    - Password managers posting to a legitimate identity provider
+  playbook: PB-005
+  splunk:
+    spl: index=proxy http_method=POST uri="*password*" | table _time src user uri
+
+- id: SOC-018
+  title: Suspicious DNS tunnelling - long high-entropy subdomains
+  description: >-
+    Long random-looking subdomain labels queried repeatedly against the same
+    parent domain indicate data being smuggled out over DNS, which defeats
+    most web proxies.
+  severity: high
+  confidence: medium
+  mitre:
+    tactic: Exfiltration
+    technique: T1048
+    subtechnique: T1048.003
+    url: https://attack.mitre.org/techniques/T1048/003/
+  data_sources: [sysmon]
+  logsource:
+    product: windows
+    category: dns_query
+  detection:
+    selection:
+      event.code: "22"
+      dns.question.name: "*tunnel.*"
+    condition: selection | count() > 5
+    group_by: [host.name, user.name]
+    window: 10m
+  fields: [dns.question.name, host.name, user.name]
+  falsepositives:
+    - DNS over HTTPS test traffic from security tooling
+  playbook: PB-006
+  splunk:
+    spl: >-
+      index=* EventCode=22 QueryName="*tunnel*" | stats count by Computer
+      UserName | where count > 5
+
+- id: SOC-019
+  title: Large outbound upload to non-corporate cloud storage
+  description: >-
+    A multi-gigabyte upload to a consumer file-sharing service. Legitimate
+    business uploads of this size are rare and should be attributed.
+  severity: critical
+  confidence: medium
+  mitre:
+    tactic: Exfiltration
+    technique: T1041
+    url: https://attack.mitre.org/techniques/T1041/
+  data_sources: [proxy]
+  logsource:
+    product: proxy
+  detection:
+    selection:
+      event.code: net_connect
+      proxy.bytes: ">100000000"
+    condition: selection
+  fields: [url.original, user.name, host.name, proxy.bytes]
+  falsepositives:
+    - Approved backup or migration jobs
+  playbook: PB-006
+  splunk:
+    spl: index=proxy bytes>100000000 | table _time src user dest bytes uri
+
+- id: SOC-020
+  title: Outbound connection to a known malicious IP
+  description: >-
+    Source or destination IP matches the local threat-intel indicator list
+    (config/threat_intel.yaml). In production this list is fed by a commercial
+    or open-source feed.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Command and Control
+    technique: T1071
+    subtechnique: T1071.001
+    url: https://attack.mitre.org/techniques/T1071/001/
+  data_sources: [proxy, firewall, windows_security]
+  logsource:
+    product: network
+  detection:
+    selection:
+      destination.ip:
+        - "198.51.100.24"
+        - "203.0.113.77"
+        - "192.0.2.45"
+    condition: selection
+  fields: [destination.ip, host.name, user.name, url.original]
+  falsepositives: []
+  playbook: PB-006
+  splunk:
+    spl: index=* (dest_ip IN ("198.51.100.24","203.0.113.77","192.0.2.45")) | table _time src dest user

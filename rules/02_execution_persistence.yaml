@@ -1,0 +1,255 @@
+# Execution, persistence and defence-evasion detections.
+
+- id: SOC-007
+  title: PowerShell launched with an encoded command
+  description: >-
+    The -EncodedCommand (-enc / -e / -ec) switch is used to hide the real
+    command line from anyone reading process creation logs. Legitimate IT
+    automation rarely needs it, so treat it as high fidelity.
+  severity: high
+  confidence: high
+  mitre:
+    tactic: Execution
+    technique: T1059
+    subtechnique: T1059.001
+    url: https://attack.mitre.org/techniques/T1059/001/
+  data_sources: [sysmon, windows_security]
+  logsource:
+    product: windows
+    category: process_creation
+  detection:
+    selection:
+      process.name: "powershell.exe"
+      process.command_line:
+        - "*-enc*"
+        - "*-EncodedCommand*"
+        - "* -e *"
+    condition: selection
+  fields: [process.command_line, process.parent.name, user.name, host.name]
+  falsepositives:
+    - Rare but legitimate management scripts that obfuscate arguments
+  playbook: PB-002
+  splunk:
+    spl: >-
+      index=* (Image="*powershell.exe" OR Image="*pwsh.exe") (CommandLine="*-enc*"
+      OR CommandLine="*-EncodedCommand*") | table _time Computer User Image
+      ParentImage CommandLine
+
+- id: SOC-008
+  title: PowerShell script block contains a download cradle
+  description: >-
+    Script block logging (4104) captures the de-obfuscated script. IEX +
+    DownloadString / Invoke-WebRequest / FromBase64String is the classic
+    "pull second stage" pattern.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Execution
+    technique: T1059
+    subtechnique: T1059.001
+    url: https://attack.mitre.org/techniques/T1059/001/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: powershell
+  detection:
+    selection:
+      event.code: "4104"
+      message:
+        - "*DownloadString*"
+        - "*DownloadFile*"
+        - "*Invoke-WebRequest*"
+        - "*FromBase64String*"
+        - "*IEX(*"
+    condition: selection
+  fields: [user.name, host.name, message]
+  falsepositives:
+    - Approved administrative scripts (keep a hash allow-list)
+  playbook: PB-002
+  splunk:
+    spl: >-
+      index=* EventCode=4104 (ScriptBlockText="*DownloadString*" OR
+      ScriptBlockText="*Invoke-WebRequest*" OR ScriptBlockText="*IEX(*") | table
+      _time Computer User ScriptBlockText
+
+- id: SOC-009
+  title: Antivirus real-time protection disabled
+  description: >-
+    Windows event 5007 records changes to the Defender configuration.
+    Disabling real-time protection is a near-universal ransomware precursor.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Defense Evasion
+    technique: T1562
+    subtechnique: T1562.001
+    url: https://attack.mitre.org/techniques/T1562/001/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: "5007"
+      av.setting:
+        - "DisableRealtimeMonitoring"
+        - "DisableBehaviorMonitoring"
+        - "DisableScriptScanning"
+    condition: selection
+  fields: [host.name, av.setting, av.value, message]
+  falsepositives:
+    - Approved troubleshooting or EDR deployment windows
+  playbook: PB-002
+  splunk:
+    spl: index=* EventCode=5007 | search "AuditPolicyChanges" - "EnableSmartScreen"
+
+- id: SOC-010
+  title: Windows service installed from a non-standard path
+  description: >-
+    System event 7045 records a newly installed service. Services dropped
+    directly in C:\Windows or a user-writable directory are used for
+    persistence and for PsExec-style remote execution.
+  severity: high
+  confidence: medium
+  mitre:
+    tactic: Persistence
+    technique: T1543
+    subtechnique: T1543.003
+    url: https://attack.mitre.org/techniques/T1543/003/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: system
+  detection:
+    selection:
+      event.code: "7045"
+    suspicious_path:
+      service.image_path:
+        - "C:\\Windows\\*"
+        - "*\\Users\\Public\\*"
+        - "*\\AppData\\*"
+        - "*\\Temp\\*"
+    condition: selection and suspicious_path
+  fields: [host.name, service.name, service.image_path, user.name]
+  falsepositives:
+    - Legitimate agent installers that unpack into a temp folder
+  playbook: PB-003
+  splunk:
+    spl: >-
+      index=wineventlog EventCode=7045 | table _time host ServiceName ImagePath
+      Account_Name | search ImagePath="C:\\Windows\\*" ImagePath="*\\Users\\*"
+
+- id: SOC-011
+  title: Administrative share accessed remotely
+  description: >-
+    Event 5140 shows a network share being opened. Access to C$ / ADMIN$ from a
+    workstation is normal for admins but is the standard second stage of
+    lateral movement.
+  severity: medium
+  confidence: medium
+  mitre:
+    tactic: Lateral Movement
+    technique: T1021
+    subtechnique: T1021.002
+    url: https://attack.mitre.org/techniques/T1021/002/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: "5140"
+      file.path:
+        - "*\\C$*"
+        - "*\\ADMIN$*"
+        - "*\\IPC$*"
+        - "*\\*$"
+    condition: selection
+  fields: [host.name, user.name, source.ip, file.path]
+  falsepositives:
+    - Admin workstations running remote management scripts
+  playbook: PB-003
+  splunk:
+    spl: index=* EventCode=5140 | search ShareName="*C$*" ShareName="*ADMIN$*" | table _time host user src_ip ShareName
+
+- id: SOC-012
+  title: Scheduled task created
+  description: >-
+    Event 4698. Scheduled tasks are the most common native Windows persistence
+    mechanism; pay attention to tasks that run from a script in a temp or
+    download folder.
+  severity: medium
+  confidence: medium
+  mitre:
+    tactic: Persistence
+    technique: T1053
+    subtechnique: T1053.005
+    url: https://attack.mitre.org/techniques/T1053/005/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: "4698"
+    condition: selection
+  fields: [host.name, user.name, message]
+  falsepositives:
+    - Software installers and patch management agents
+  playbook: PB-003
+  splunk:
+    spl: index=* EventCode=4698 | table _time host SubjectUserName TaskName TaskContent
+
+- id: SOC-013
+  title: Windows audit log cleared
+  description: >-
+    Event 1102. Clearing the Security log is an anti-forensic action and one
+    of the strongest single indicators that something went wrong.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Defense Evasion
+    technique: T1070
+    subtechnique: T1070.001
+    url: https://attack.mitre.org/techniques/T1070/001/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: "1102"
+    condition: selection
+  fields: [host.name, user.name]
+  falsepositives:
+    - Log rotation performed by an authorised monitoring tool
+  playbook: PB-003
+  splunk:
+    spl: index=* EventCode=1102 | table _time host user SubjectUserName
+
+- id: SOC-014
+  title: Inbound firewall rule added by a user
+  description: >-
+    Event 4948 / 4956. A standard user opening an inbound listener on a
+    finance or engineering host is a common precursor to reverse shells.
+  severity: medium
+  confidence: medium
+  mitre:
+    tactic: Defense Evasion
+    technique: T1562
+    subtechnique: T1562.004
+    url: https://attack.mitre.org/techniques/T1562/004/
+  data_sources: [windows_security]
+  logsource:
+    product: windows
+    service: security
+  detection:
+    selection:
+      event.code: ["4948", "4956"]
+    condition: selection
+  fields: [host.name, user.name, firewall.rule, message]
+  falsepositives:
+    - Developers running local test services
+  playbook: PB-002
+  splunk:
+    spl: index=* (EventCode=4948 OR EventCode=4956) | table _time host user SubjectUserName

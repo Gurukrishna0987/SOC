@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Lab artefacts (regenerate with `make demo`)
+data/*.jsonl
+data/*.json
+data/*.md
+
+# Secrets - never commit these
+.env
+*.pem
+*.key
+lab/insecure_demo/.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

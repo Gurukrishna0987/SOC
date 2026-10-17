@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}SOC Lab - Hunt{% endblock %}
+{% block content %}
+
+<h1>Hunting console</h1>
+<p class="sub">
+  Free-text search across every field of every event in the corpus. This is the
+  "no alert fired" side of a SOC - proactive hunting.
+</p>
+
+<form class="filters" method="get">
+  <input type="search" name="q" value="{{ query }}" placeholder="e.g. 198.51.100.24, powershell, encoded, 4720" style="min-width:420px;" />
+  <button type="submit">Hunt</button>
+  <a class="btn-ghost" href="{{ url_for('hunt') }}"
+     style="padding:8px 14px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);font-size:13px;">Clear</a>
+</form>
+
+{% if query %}
+<p class="small muted">{{ results|length }} matching event(s) for "<span class="mono accent-text">{{ query }}</span>"</p>
+<div class="panel">
+  <table>
+    <thead>
+      <tr><th>Timestamp</th><th>Source</th><th>Event</th><th>Host</th><th>User</th><th>Message</th><th>Scenario</th></tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr>
+        <td class="mono tiny muted">{{ r.timestamp[:19].replace('T',' ') }}</td>
+        <td class="mono tiny">{{ r.source }}</td>
+        <td class="mono tiny">{{ r.code }}</td>
+        <td class="mono tiny">{{ r.host }}</td>
+        <td class="mono tiny">{{ r.user }}</td>
+        <td class="tiny">{{ (r.message or '')[:90] }}</td>
+        <td>
+          {% if r.scenario %}<span class="badge tid">{{ r.scenario }}</span>{% else %}<span class="muted tiny">benign</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted" style="padding:26px;text-align:center;">No matches. Try an IP, a username, an event code or a keyword.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel">
+  <h2>Starter hunts</h2>
+  <ul class="list">
+    <li><code>198.51.100.24</code> &mdash; the external attacker IP: every event it touched</li>
+    <li><code>powershell</code> &mdash; all PowerShell activity across endpoints</li>
+    <li><code>4625</code> &mdash; every failed Windows logon in the corpus</li>
+    <li><code>a.ramesh</code> &mdash; everything the compromised finance user did</li>
+    <li><code>tunnel</code> &mdash; DNS tunnelling queries</li>
+    <li><code>encrypted</code> &mdash; files touched by the ransomware</li>
+  </ul>
+</div>
+{% endif %}
+
+{% endblock %}

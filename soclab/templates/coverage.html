@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}SOC Lab - Detection coverage{% endblock %}
+{% block content %}
+
+<h1>Detection coverage &amp; rule performance</h1>
+<p class="sub">
+  Measured against the labelled ground truth in the synthetic corpus. This is the
+  evidence behind "my rules actually work" - and the list of what they miss.
+</p>
+
+<div class="grid g4">
+  <div class="panel kpi">
+    <span class="value ok-text">{{ report.stage_recall * 100 }}%</span>
+    <span class="label">Attack-stage recall</span>
+    <span class="note">{{ report.stage_detected }}/{{ report.stage_total }} stages</span>
+  </div>
+  <div class="panel kpi">
+    <span class="value ok-text">{{ report.alert_precision * 100 }}%</span>
+    <span class="label">Alert precision</span>
+    <span class="note">{{ report.true_positive_alerts }} TP / {{ report.false_positive_alerts }} FP</span>
+  </div>
+  <div class="panel kpi">
+    <span class="value">{{ report.attack_events }}</span>
+    <span class="label">Attack events</span>
+    <span class="note">labelled ground truth</span>
+  </div>
+  <div class="panel kpi">
+    <span class="value">{{ report.benign_events }}</span>
+    <span class="label">Benign events</span>
+    <span class="note">background noise</span>
+  </div>
+</div>
+
+<div class="panel mt">
+  <h2>Attack matrix - did we catch every step of the intrusion?</h2>
+  <table>
+    <thead>
+      <tr><th>Scenario</th><th>Stage</th><th>Result</th><th>Rules that fired</th><th class="right">Events</th></tr>
+    </thead>
+    <tbody>
+      {% for s in report.stage_results %}
+      <tr>
+        <td class="mono small">{{ s.scenario }}</td>
+        <td class="small">{{ s.stage }}</td>
+        <td>
+          {% if s.detected %}
+            <span class="badge ok">detected</span>
+          {% else %}
+            <span class="badge miss">missed</span>
+          {% endif %}
+        </td>
+        <td class="mono tiny">
+          {% for r in s.rules %}<span class="badge rule" style="margin-right:4px;">{{ r }}</span>{% else %}<span class="muted">-</span>{% endfor %}
+        </td>
+        <td class="tnum">{{ s.events }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="grid g2 mt">
+  <div class="panel">
+    <h2>MITRE ATT&amp;CK technique coverage</h2>
+    <table>
+      <thead><tr><th>Technique</th><th>Tactic</th><th>Rules</th><th>Covered</th></tr></thead>
+      <tbody>
+        {% for tid, rlist in technique_map.items() %}
+        <tr>
+          <td class="mono">{{ tid }}</td>
+          <td class="small">{{ rlist[0].tactic }}</td>
+          <td class="mono tiny">{% for r in rlist %}{{ r.id }} {% endfor %}</td>
+          <td>
+            {% if report.technique_coverage.get(tid) %}
+              <span class="badge ok">covered</span>
+            {% else %}
+              <span class="badge miss">gap</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Rule performance</h2>
+    <table>
+      <thead><tr><th>Rule</th><th>Title</th><th class="right">Alerts</th><th class="right">TP</th><th class="right">FP</th></tr></thead>
+      <tbody>
+        {% for rule, stats in rule_rows %}
+        <tr>
+          <td class="mono small">
+            {% if incidents_first.get(rule.id) %}
+              <a href="{{ url_for('incident_detail', incident_id=incidents_first[rule.id]) }}">{{ rule.id }}</a>
+            {% else %}
+              {{ rule.id }}
+            {% endif %}
+          </td>
+          <td class="small">{{ rule.title[:46] }}</td>
+          <td class="tnum">{{ stats.get('alerts', 0) }}</td>
+          <td class="tnum ok-text">{{ stats.get('true_positive', 0) }}</td>
+          <td class="tnum p2-text">{{ stats.get('false_positive', 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

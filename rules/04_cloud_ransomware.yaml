@@ -1,0 +1,207 @@
+# Cloud control-plane and ransomware / impact detections.
+
+- id: SOC-021
+  title: S3 bucket ACL made public
+  description: >-
+    PutBucketAcl / PutBucketPolicy with a public principal on a bucket that
+    holds business data. Exposed buckets are one of the most common cloud
+    misconfigurations and a favourite ransomware exfiltration path.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Exfiltration
+    technique: T1530
+    url: https://attack.mitre.org/techniques/T1530/
+  data_sources: [cloud_audit]
+  logsource:
+    product: aws
+    service: cloudtrail
+  detection:
+    selection:
+      event.code: cloud_api
+      cloud.action:
+        - "PutBucketAcl"
+        - "PutBucketPolicy"
+        - "DeleteBucketPolicy"
+    condition: selection
+  fields: [cloud.resource.name, cloud.action, user.name, cloud.source.ip]
+  falsepositives:
+    - Deliberate public-read on a website asset bucket
+  playbook: PB-007
+  splunk:
+    spl: index=cloud sourcetype="aws:cloudtrail" (eventName="PutBucketAcl" OR eventName="PutBucketPolicy") | table _time userName eventName resourceName
+
+- id: SOC-022
+  title: Administrator-level IAM policy attached to a user
+  description: >-
+    AttachUserPolicy / PutUserPolicy with AdministratorAccess or a wildcard
+    policy. A single over-privileged IAM user is enough to lose a cloud
+    account.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Privilege Escalation
+    technique: T1098
+    subtechnique: T1098.003
+    url: https://attack.mitre.org/techniques/T1098/003/
+  data_sources: [cloud_audit]
+  logsource:
+    product: aws
+    service: cloudtrail
+  detection:
+    selection:
+      event.code: cloud_api
+      cloud.action:
+        - "AttachUserPolicy"
+        - "PutUserPolicy"
+        - "AttachRolePolicy"
+        - "PutRolePolicy"
+    condition: selection
+  fields: [cloud.resource.name, cloud.action, user.name]
+  falsepositives:
+    - A deliberate one-off role elevation during a migration
+  playbook: PB-007
+  splunk:
+    spl: index=cloud sourcetype="aws:cloudtrail" (eventName="AttachUserPolicy" OR eventName="PutUserPolicy") | table _time userName eventName
+
+- id: SOC-023
+  title: MFA deactivated for an IAM user
+  description: >-
+    DeactivateMFADevice / DeleteVirtualMFADevice. Removing MFA is a reliable
+    precursor to account takeover in the cloud.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Defense Evasion
+    technique: T1556
+    subtechnique: T1556.006
+    url: https://attack.mitre.org/techniques/T1556/006/
+  data_sources: [cloud_audit]
+  logsource:
+    product: aws
+    service: cloudtrail
+  detection:
+    selection:
+      event.code: cloud_api
+      cloud.action:
+        - "DeactivateMFADevice"
+        - "DeleteVirtualMFADevice"
+        - "DeleteMFADevice"
+    condition: selection
+  fields: [cloud.resource.name, cloud.action, user.name, cloud.source.ip]
+  falsepositives:
+    - Device replacement by the IAM team
+  playbook: PB-007
+  splunk:
+    spl: index=cloud sourcetype="aws:cloudtrail" eventName="DeactivateMFADevice" | table _time userName sourceIPAddress
+
+- id: SOC-024
+  title: Shadow copy deletion - ransomware precursor
+  description: >-
+    vssadmin / wbadmin deleting backups. Destroying the recovery path is
+    always done immediately before encryption starts.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Impact
+    technique: T1490
+    url: https://attack.mitre.org/techniques/T1490/
+  data_sources: [sysmon]
+  logsource:
+    product: windows
+    category: process_creation
+  detection:
+    selection:
+      process.name:
+        - "vssadmin.exe"
+        - "wbadmin.exe"
+        - "bcdedit.exe"
+    shadow:
+      process.command_line: "*delete*"
+    condition: selection and shadow
+  fields: [process.command_line, host.name, user.name]
+  falsepositives:
+    - Backup software pruning old recovery points
+  playbook: PB-008
+  splunk:
+    spl: >-
+      index=* (Image="*vssadmin.exe" OR Image="*wbadmin.exe") CommandLine="*delete*" |
+      table _time Computer User Image CommandLine
+
+- id: SOC-025
+  title: Mass file encryption - files renamed with a ransomware extension
+  description: >-
+    A burst of file-create events with an unfamiliar extension on one host.
+    The extension and the rate are what distinguish ransomware from normal
+    file activity.
+  severity: critical
+  confidence: high
+  mitre:
+    tactic: Impact
+    technique: T1486
+    url: https://attack.mitre.org/techniques/T1486/
+  data_sources: [sysmon]
+  logsource:
+    product: windows
+    category: file_create
+  detection:
+    selection:
+      event.code: "11"
+      file.name:
+        - "*.encrypted"
+        - "*.locked"
+        - "*.crypt"
+        - "*.enc"
+    condition: selection | count() > 5
+    group_by: [host.name]
+    window: 5m
+  fields: [host.name, file.name, user.name, process.name]
+  falsepositives:
+    - Legitimate bulk encryption tooling (rare in an office environment)
+  playbook: PB-008
+  splunk:
+    spl: >-
+      index=* EventCode=11 (FileName="*.encrypted" OR FileName="*.locked") | stats
+      count by Computer | where count > 5
+
+- id: SOC-026
+  title: Office macro-enabled document executed
+  description: >-
+    winword.exe / excel.exe spawning a child process such as powershell or
+    cmd.exe. A macro that spawns a shell is the standard malicious-macro
+    behaviour.
+  severity: high
+  confidence: medium
+  mitre:
+    tactic: Execution
+    technique: T1204
+    subtechnique: T1204.002
+    url: https://attack.mitre.org/techniques/T1204/002/
+  data_sources: [sysmon]
+  logsource:
+    product: windows
+    category: process_creation
+  detection:
+    selection:
+      process.parent.name:
+        - "winword.exe"
+        - "excel.exe"
+        - "outlook.exe"
+        - "powerpnt.exe"
+    child:
+      process.name:
+        - "powershell.exe"
+        - "cmd.exe"
+        - "wscript.exe"
+        - "cscript.exe"
+        - "mshta.exe"
+    condition: selection and child
+  fields: [process.parent.name, process.name, process.command_line, user.name, host.name]
+  falsepositives:
+    - Some legitimate in-house Excel add-ins shell out to scripts
+  playbook: PB-002
+  splunk:
+    spl: >-
+      index=* (ParentImage="*winword.exe" OR ParentImage="*excel.exe")
+      (Image="*powershell.exe" OR Image="*cmd.exe" OR Image="*wscript.exe") | table
+      _time Computer User ParentImage Image CommandLine

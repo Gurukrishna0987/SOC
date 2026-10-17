@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<form version="1.1">
+  <label>SOC Lab Overview</label>
+  <description>Detection coverage exported from the SOC Lab rule set.</description>
+  <fieldset submitButton="true" autoRun="true">
+    <panel id="panel_1">
+      <title>SOC-001 - Multiple failed logons from a single source (brute force / p</title>
+      <table>
+        <search>
+          <query>index=* (EventCode=4625) | stats count as attempts dc(user) as user by src_ip | where attempts > 10 | sort - attempts</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+      </table>
+    </panel>
+    <panel id="panel_2">
+      <title>SOC-002 - Successful logon from a source that had recent failed logons</title>
+      <table>
+        <search>
+          <query>index=* EventCode=4625 | stats count as fails dc(user) as user by src_ip | where fails > 3 | join src_ip [ search index=* EventCode=4624 | table _time src_ip user Account_Name ]</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+      </table>
+    </panel>
+    <panel id="panel_3">
+      <title>SOC-003 - New user account created on a domain controller</title>
+      <table>
+        <search>
+          <query>index=* EventCode=4720 | table _time user Account_Name host TargetUserName</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+      </table>
+    </panel>
+    <panel id="panel_4">
+      <title>SOC-004 - Account added to a privileged group</title>
+      <table>
+        <search>
+          <query>index=* EventCode=4732 | where \"TargetUserName\" IN (\"Domain Admins\",\"Administrators\")</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+      </table>
+    </panel>
+    <panel id="panel_5">
+      <title>SOC-005 - Special privileges assigned to a new logon</title>
+      <table>
+        <search>
+          <query>index=* EventCode=4672 | search - user=\"svc_*\" | table _time user host PrivilegeList</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+      </table>
+    </panel>
+    <panel id="panel_6">
+      <title>SOC-006 - Linux SSH brute force against a server</title>
+      <table>
+        <search>
+          <query>index=linux sourcetype=\"syslog\" \"Failed password\" | stats count by src_ip | where count > 8</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+      </table>
+    </panel>
+  </fieldset>
+</form>

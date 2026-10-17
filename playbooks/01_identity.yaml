@@ -1,0 +1,72 @@
+# Response playbooks - identity & access.
+
+- id: PB-001
+  title: Credential attack response (brute force / password spray)
+  mitre: [T1110, T1110.001, T1078]
+  triage:
+    - 'Confirm the source IP and count the attempts per account: `index=* EventCode=4625 | stats count dc(user) by src_ip`.'
+    - Identify every account targeted from this IP. Password spray = one attempt per many accounts; brute force = many attempts against one account.
+    - Check whether the same IP produced a 4624 success (credential stuffing succeeded).
+    - 'Check the account''s normal logon geography and time with `index=* EventCode=4624 user=<account> | stats count by src_ip | sort - count`.'
+    - If the source is a known proxy/VPN exit, treat it as higher risk, not lower.
+  contain:
+    - step: Block the source IP at the perimeter
+      command: "firewall-cmd --add-rich-rule='rule family=ipv4 source address=198.51.100.24/32 drop'"
+    - step: Disable or lock the targeted account pending reset
+      command: "net user <account> /active:no"
+    - step: Force a password reset and revoke Kerberos tickets
+      command: "dsquery user -samid <account> | dsmod user -pwd <newpassword> -mustchg yes ; klist -li | findstr <account>"
+  eradicate:
+    - step: Remove any account that was created by the attacker
+      command: "net user <suspicious_account> /delete"
+    - step: Search for persistence created with the compromised account
+      command: "index=* (EventCode=4720 OR EventCode=4732) user=<account>"
+  recover:
+    - Restore access with MFA enforced and confirm the legitimate user can log in.
+    - Review what the account accessed during the compromise window (VPN, file shares, mailbox rules).
+  escalate:
+    - Any successful logon after failures => P1, notify the identity team and the account owner immediately.
+    - If the account is privileged => escalate to the incident response lead.
+  evidence:
+    - Full 4625/4624 event set for the source IP
+    - Account lockout and password reset audit trail
+    - Screenshot of the failed-then-successful logon timeline
+  comms: |
+    SEV: P1 - Credential attack against <ACCOUNT>
+    Detected: <TIME> | Source: <SRC_IP> | Attempts: <N> | Success: <YES/NO>
+    Action taken: source IP blocked, account locked pending password reset
+    Next: verify no lateral movement from this account, check for new accounts/groups
+
+- id: PB-004
+  title: Account and privilege abuse response
+  mitre: [T1136, T1098, T1078]
+  triage:
+    - Pull the full 4720/4732/4672 history for the account and the host.
+    - 'Establish whether the creation was authorised: check the JML ticket in the ITSM tool.'
+    - If the account is in Domain Admins, assume the domain is compromised until proven otherwise.
+    - Identify which system issued the change (the logon's source IP and the tool that made the API call).
+  contain:
+    - step: Remove the account from the privileged group
+      command: "net localgroup 'Domain Admins' <account> /remove"
+    - step: Disable the account
+      command: "net user <account> /active:no"
+    - step: If privileged, rotate the KRBTGT twice (krbtgt is what makes a golden ticket possible)
+      command: "dsquery /forest /krbtgt"
+  eradicate:
+    - step: Audit every group membership change made by the same account in the last 30 days
+      command: "index=* EventCode=4728 OR EventCode=4732 | stats by user group"
+    - step: Review and remove any unauthorised scheduled tasks and services
+  recover:
+    - Rebuild any host where the attacker had administrative rights - credential dumping makes cleanup unreliable.
+    - Reset passwords for every account that the attacker could read (Kronos, service secrets, etc.).
+  escalate:
+    - Privileged group change with no JML ticket => P1, escalate to the IAM owner and the incident response lead immediately.
+  evidence:
+    - 4720/4732/4672 event exports
+    - JML ticket reference or confirmation that none exists
+    - List of accounts that had access to the affected host
+  comms: |
+    SEV: P1 - Unauthorised privileged account change
+    Account: <ACCOUNT> | Group: <GROUP> | Host: <HOST> | Ticket: <NONE / ID>
+    Action: account removed from group and disabled; investigation ongoing
+    Next: credential rotation for all accounts with access to <HOST>

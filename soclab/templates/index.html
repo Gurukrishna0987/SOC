@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}SOC Lab - Overview{% endblock %}
+{% block content %}
+
+<div class="mb0">
+  <h1>Security Operations Centre overview</h1>
+  <p class="sub">
+    {{ summary.events }} synthetic events ({{ summary.attack_events }} attack / {{ summary.events - summary.attack_events }} benign)
+    &rarr; {{ summary.alerts }} alerts &rarr; {{ summary.incidents }} incidents.
+    Risk score = rule severity + asset criticality + ATT&amp;CK tactic + confidence + event volume.
+  </p>
+</div>
+
+<div class="grid g4">
+  <div class="panel kpi">
+    <span class="value p1-text">{{ summary.by_priority.get('P1', 0) }}</span>
+    <span class="label">P1 critical</span>
+    <span class="note">acknowledge in {{ 15 }} min</span>
+  </div>
+  <div class="panel kpi">
+    <span class="value p2-text">{{ summary.by_priority.get('P2', 0) }}</span>
+    <span class="label">P2 high</span>
+    <span class="note">acknowledge in 60 min</span>
+  </div>
+  <div class="panel kpi">
+    <span class="value accent-text">{{ summary.stage_recall * 100 }}%</span>
+    <span class="label">Attack-stage recall</span>
+    <span class="note">measured against labelled ground truth</span>
+  </div>
+  <div class="panel kpi">
+    <span class="value ok-text">{{ summary.alert_precision * 100 }}%</span>
+    <span class="label">Alert precision</span>
+    <span class="note">{{ report.true_positive_alerts }} true / {{ report.false_positive_alerts }} false positives</span>
+  </div>
+</div>
+
+<div class="grid g23 mt">
+  <div class="panel">
+    <h2>Alert volume by day</h2>
+    {{ timeline_chart|safe }}
+  </div>
+  <div class="panel">
+    <h2>Incidents by priority</h2>
+    <table>
+      <thead><tr><th>Priority</th><th class="right">Count</th><th>SLA</th></tr></thead>
+      <tbody>
+        {% for p in ['P1','P2','P3','P4'] %}
+        <tr>
+          <td><span class="badge {{ p }}">{{ p }}</span></td>
+          <td class="tnum">{{ by_priority.get(p, 0) }}</td>
+          <td class="muted small">{{ {'P1':'15 min','P2':'60 min','P3':'4 h','P4':'24 h'}[p] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <hr class="sep" />
+    <h3>Critical assets in scope</h3>
+    <div class="pill-row">
+      {% for a in critical_assets %}<span class="pill">{{ a }}</span>{% else %}<span class="muted small">none</span>{% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="grid g3 mt">
+  <div class="panel">
+    <h2>Top firing rules</h2>
+    {{ rule_chart|safe }}
+  </div>
+  <div class="panel">
+    <h2>Most affected assets</h2>
+    {{ asset_chart|safe }}
+  </div>
+  <div class="panel">
+    <h2>ATT&amp;CK tactics</h2>
+    {{ tactic_chart|safe }}
+  </div>
+</div>
+
+<div class="grid g32 mt">
+  <div class="panel">
+    <h2>Priority incidents</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Pr</th><th>Score</th><th>Rule</th><th>Asset</th><th>ATT&amp;CK</th></tr>
+      </thead>
+      <tbody>
+        {% for i in incidents[:12] %}
+        <tr>
+          <td class="mono"><a href="{{ url_for('incident_detail', incident_id=i.id) }}">{{ i.id }}</a></td>
+          <td><span class="badge {{ i.priority }}">{{ i.priority }}</span></td>
+          <td class="tnum">{{ i.risk_score }}</td>
+          <td class="mono small">{{ i.rule_id }}</td>
+          <td class="mono small">{{ i.asset }}</td>
+          <td><span class="badge tid">{{ i.technique_id }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="mt"><a href="{{ url_for('incidents') }}">View all {{ summary.incidents }} incidents &rarr;</a></p>
+  </div>
+  <div class="panel">
+    <h2>MITRE ATT&amp;CK techniques observed</h2>
+    {{ technique_chart|safe }}
+    <hr class="sep" />
+    <h3>Detection coverage</h3>
+    <p class="small muted mb0">
+      {{ report.stage_detected }}/{{ report.stage_total }} attack stages detected across
+      7 simulated intrusion scenarios.
+      {% if report.missed_stages %}
+      Blind spots: {{ report.missed_stages|join(', ') }}.
+      {% else %}
+      Every modelled attack stage is covered by at least one rule.
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+{% endblock %}

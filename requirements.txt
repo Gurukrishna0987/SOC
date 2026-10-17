@@ -1,0 +1,7 @@
+# SOC Lab runtime dependencies.
+# The core pipeline (generator -> engine -> triage) only needs PyYAML.
+# Flask is needed for the dashboard, pytest for the test suite.
+
+PyYAML>=6.0
+Flask>=3.0
+pytest>=8.0

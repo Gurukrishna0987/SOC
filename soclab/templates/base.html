@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}SOC Lab{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#128274;</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">&#9673;</span>
+      <div>
+        <div class="brand-name">SOC<span class="accent">LAB</span></div>
+        <div class="brand-sub">Security Operations Centre pipeline</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">Overview</a>
+      <a href="{{ url_for('incidents') }}" class="{{ 'active' if request.endpoint == 'incidents' }}">Incidents</a>
+      <a href="{{ url_for('hunt') }}" class="{{ 'active' if request.endpoint == 'hunt' }}">Hunt</a>
+      <a href="{{ url_for('coverage') }}" class="{{ 'active' if request.endpoint == 'coverage' }}">Coverage</a>
+      <a href="{{ url_for('playbooks_index') }}" class="{{ 'active' if request.endpoint in ('playbooks_index','playbook_detail') }}">Playbooks</a>
+    </nav>
+    <div class="status"><span class="dot"></span> pipeline live</div>
+  </header>
+
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div>Built as a hands-on SOC home lab &mdash; generate &rarr; detect &rarr; triage &rarr; respond</div>
+    <div class="muted">Data is entirely synthetic. No real hosts, users or credentials are involved.</div>
+  </footer>
+</body>
+</html>
