@@ -70,6 +70,10 @@ python3 -m venv .venv
 .venv/bin/python -m soclab serve     # dashboard on http://localhost:8080
 ```
 
+Prefer an installed CLI? `pip install -e .[dev]` gives you a `soclab`
+command that does the same thing. The core engine needs only PyYAML; the
+dashboard needs Flask.
+
 Or with `make`:
 
 ```bash
@@ -259,6 +263,7 @@ SOC/
 ├── lab/insecure_demo/      # intentionally vulnerable reference app
 ├── tests/                  # 48 pytest tests
 ├── docs/                   # the career kit (see below)
+├── pyproject.toml          # package metadata + pytest configuration
 └── .github/workflows/      # CI: tests + pipeline + export validation
 ```
 
