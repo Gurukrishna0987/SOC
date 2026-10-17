@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,23 @@ from werkzeug.serving import make_server
 from soclab.vapt import SafetyError, check_target, is_loopback, review_tls, scan
 
 APP_PATH = Path(__file__).resolve().parent.parent / "lab" / "insecure_demo" / "app.py"
+
+
+def _wait_until_ready(url: str, timeout: float = 20.0) -> bool:
+    """Block until the server actually accepts connections.
+
+    A fixed sleep is flaky on a loaded CI runner - the server can still be
+    binding when the test fires its first request, which looks like a real
+    failure. Poll instead.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2):
+                return True
+        except Exception:
+            time.sleep(0.25)
+    return False
 
 
 @pytest.fixture(scope="module")
@@ -23,11 +41,17 @@ def demo_server():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    server = make_server("127.0.0.1", 5099, module.app, threaded=True)
+    # Bind to port 0 so the OS picks a free port - a fixed port is a flaky
+    # test on shared CI runners.
+    server = make_server("127.0.0.1", 0, module.app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    time.sleep(0.6)
-    yield "http://127.0.0.1:5099"
+
+    base = f"http://127.0.0.1:{server.port}"
+    if not _wait_until_ready(base):
+        server.shutdown()
+        pytest.fail("demo server did not become ready in time")
+    yield base
     server.shutdown()
 
 
